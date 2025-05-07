@@ -40,6 +40,8 @@ try:
     app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
     app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
     app.config['TEMPLATES_AUTO_RELOAD'] = True
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+    app.config['PERMANENT_SESSION_LIFETIME'] = 1800
 
     # Klasörlerin varlığını kontrol et
     required_dirs = ['uploads', 'static', 'templates']
@@ -64,6 +66,9 @@ try:
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
         response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
         return response
 
     def is_csv_file(filename):
@@ -132,7 +137,8 @@ try:
                     "static_folder": app.static_folder,
                     "template_folder": app.template_folder,
                     "template_exists": template_exists,
-                    "static_exists": static_exists
+                    "static_exists": static_exists,
+                    "working_directory": os.getcwd()
                 }
             })
         except Exception as e:
@@ -141,7 +147,15 @@ try:
 
     @app.route('/favicon.ico')
     def favicon():
-        return send_from_directory(app.static_folder, 'favicon.ico')
+        try:
+            if os.path.exists(os.path.join(app.static_folder, 'favicon.ico')):
+                return send_from_directory(app.static_folder, 'favicon.ico')
+            else:
+                logger.error("Favicon not found in static folder")
+                return '', 404
+        except Exception as e:
+            logger.error(f"Favicon error: {str(e)}")
+            return '', 404
 
     @app.route('/')
     def index():
@@ -150,9 +164,10 @@ try:
             template_path = os.path.join(app.template_folder, 'index.html')
             logger.debug(f'Template path: {template_path}')
             logger.debug(f'Template exists: {os.path.exists(template_path)}')
+            logger.debug(f'Working directory: {os.getcwd()}')
             
             if not os.path.exists(template_path):
-                return jsonify({'error': 'Template not found'}), 404
+                return jsonify({'error': 'Template not found', 'path': template_path}), 404
                 
             return render_template('index.html')
         except Exception as e:
