@@ -26,17 +26,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-app = Flask(__name__, static_folder='static')
+# Uygulama başlatma
+app = Flask(__name__,
+           static_folder=os.path.abspath('static'),
+           template_folder=os.path.abspath('templates'))
 CORS(app)
+
+# Temel konfigürasyon
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
-# Favicon için route
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(os.path.join(app.root_path, 'static'),
-                             'favicon.ico', mimetype='image/vnd.microsoft.icon')
+# Klasörlerin varlığını kontrol et
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs('static', exist_ok=True)
+os.makedirs('templates', exist_ok=True)
+
+logger.info(f"Static folder: {app.static_folder}")
+logger.info(f"Template folder: {app.template_folder}")
 
 @app.before_request
 def log_request_info():
@@ -108,12 +115,24 @@ os.makedirs('static', exist_ok=True)
 
 @app.route('/health')
 def health_check():
-    return jsonify({"status": "healthy", "timestamp": time.time()})
+    return jsonify({
+        "status": "healthy",
+        "timestamp": time.time(),
+        "static_folder": app.static_folder,
+        "template_folder": app.template_folder
+    })
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static'),
+                             'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route('/')
 def index():
     try:
         logger.debug('Ana sayfa isteği alındı')
+        logger.debug(f'Template klasörü: {app.template_folder}')
+        logger.debug(f'index.html var mı: {os.path.exists(os.path.join(app.template_folder, "index.html"))}')
         return render_template('index.html')
     except Exception as e:
         logger.error(f'Ana sayfa hatası: {str(e)}')
