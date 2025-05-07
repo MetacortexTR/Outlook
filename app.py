@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, jsonify, after_this_request, send_from_directory
+from flask import Flask, render_template, request, send_file, jsonify, after_this_request, send_from_directory, redirect
 import os
 from find_emails import find_categorized_emails_in_file
 import pandas as pd
@@ -13,35 +13,46 @@ import traceback  # Hata izleme için ekledik
 import time
 from openpyxl.styles import Font
 import sys
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Temel dizin yolu
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # Loglama ayarları
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(os.path.join(BASE_DIR, 'app.log'), encoding='utf-8', mode='w')
+        logging.FileHandler(os.path.join(BASE_DIR, 'app.log'), encoding='utf-8', mode='a')
     ]
 )
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 try:
     # Uygulama başlatma
     app = Flask(__name__,
                static_folder=os.path.join(BASE_DIR, 'static'),
                template_folder=os.path.join(BASE_DIR, 'templates'))
-    CORS(app)
-
-    # Temel konfigürasyon
-    app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
-    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
-    app.config['TEMPLATES_AUTO_RELOAD'] = True
-    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+    
+    # CORS ve güvenlik ayarları
+    CORS(app, resources={r"/*": {"origins": "*"}})
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 300
     app.config['PERMANENT_SESSION_LIFETIME'] = 1800
+    app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+    app.config['TEMPLATES_AUTO_RELOAD'] = False
+    app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
+    app.config['JSON_AS_ASCII'] = False
+    app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+    app.config['PROPAGATE_EXCEPTIONS'] = True
+
+    # Railway specific configurations
+    app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')
+    app.config['PREFERRED_URL_SCHEME'] = 'https'
 
     # Klasörlerin varlığını kontrol et
     required_dirs = ['uploads', 'static', 'templates']
@@ -51,24 +62,27 @@ try:
             logger.info(f"Creating directory: {dir_path}")
             os.makedirs(dir_path)
 
+    logger.info(f"Application startup - Environment: {os.environ.get('FLASK_ENV', 'production')}")
     logger.info(f"Base directory: {BASE_DIR}")
     logger.info(f"Static folder: {app.static_folder}")
     logger.info(f"Template folder: {app.template_folder}")
+    logger.info(f"Working directory: {os.getcwd()}")
 
     @app.before_request
-    def log_request_info():
-        logger.debug('Headers: %s', request.headers)
-        logger.debug('Body: %s', request.get_data())
+    def before_request():
+        if not request.is_secure and app.env != 'development':
+            url = request.url.replace('http://', 'https://', 1)
+            return redirect(url, code=301)
 
     @app.after_request
     def after_request(response):
-        logger.debug('Response: %s', response.get_data())
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
         response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+        response.headers['Cache-Control'] = 'public, max-age=300'
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
         return response
 
     def is_csv_file(filename):
@@ -128,7 +142,7 @@ try:
             template_exists = os.path.exists(os.path.join(app.template_folder, 'index.html'))
             static_exists = os.path.exists(os.path.join(app.static_folder, 'favicon.ico'))
             
-            return jsonify({
+            health_data = {
                 "status": "healthy",
                 "timestamp": time.time(),
                 "environment": {
@@ -138,23 +152,31 @@ try:
                     "template_folder": app.template_folder,
                     "template_exists": template_exists,
                     "static_exists": static_exists,
-                    "working_directory": os.getcwd()
+                    "working_directory": os.getcwd(),
+                    "env": os.environ.get('FLASK_ENV', 'production')
                 }
-            })
+            }
+            logger.info(f"Health check response: {health_data}")
+            return jsonify(health_data)
         except Exception as e:
-            logger.error(f"Health check error: {str(e)}")
-            return jsonify({"status": "error", "message": str(e)}), 500
+            error_msg = f"Health check error: {str(e)}"
+            logger.error(error_msg)
+            logger.error(traceback.format_exc())
+            return jsonify({"status": "error", "message": error_msg}), 500
 
     @app.route('/favicon.ico')
     def favicon():
         try:
-            if os.path.exists(os.path.join(app.static_folder, 'favicon.ico')):
+            favicon_path = os.path.join(app.static_folder, 'favicon.ico')
+            if os.path.exists(favicon_path):
+                logger.debug(f"Serving favicon from: {favicon_path}")
                 return send_from_directory(app.static_folder, 'favicon.ico')
             else:
-                logger.error("Favicon not found in static folder")
+                logger.error(f"Favicon not found at: {favicon_path}")
                 return '', 404
         except Exception as e:
             logger.error(f"Favicon error: {str(e)}")
+            logger.error(traceback.format_exc())
             return '', 404
 
     @app.route('/')
@@ -167,13 +189,16 @@ try:
             logger.debug(f'Working directory: {os.getcwd()}')
             
             if not os.path.exists(template_path):
-                return jsonify({'error': 'Template not found', 'path': template_path}), 404
+                error_msg = {'error': 'Template not found', 'path': template_path}
+                logger.error(f"Template error: {error_msg}")
+                return jsonify(error_msg), 404
                 
             return render_template('index.html')
         except Exception as e:
-            logger.error(f'Ana sayfa hatası: {str(e)}')
+            error_msg = f'Ana sayfa hatası: {str(e)}'
+            logger.error(error_msg)
             logger.error(traceback.format_exc())
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': error_msg}), 500
 
     @app.route('/process', methods=['POST', 'OPTIONS'])
     def process_file():

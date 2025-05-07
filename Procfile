@@ -1,1 +1,1 @@
-web: gunicorn app:app
+web: gunicorn app:app --bind 0.0.0.0:$PORT --workers 4 --threads 4 --worker-class gevent --worker-connections 1000 --timeout 300 --keep-alive 5 --log-level info --access-logfile - --error-logfile - --preload
