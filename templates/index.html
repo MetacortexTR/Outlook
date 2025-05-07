@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-posta Adresi Çıkarıcı</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+            margin-top: 50px;
+        }
+        .upload-box {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .upload-icon {
+            font-size: 48px;
+            color: #0d6efd;
+            margin-bottom: 20px;
+        }
+        #uploadForm, #excelUploadForm, #airtableUploadForm {
+            margin-top: 20px;
+        }
+        #loading {
+            display: none;
+            margin-top: 20px;
+        }
+        .file-info {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+        #error-message {
+            display: none;
+            color: #dc3545;
+            margin-top: 10px;
+        }
+        .section-title {
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- CSV Import Alanı -->
+        <div class="upload-box text-center">
+            <div class="upload-icon">
+                📧
+            </div>
+            <h2 class="section-title">CSV'den Excel'e Dönüştürme</h2>
+            <p class="text-muted mb-4">
+                CSV dosyanızı yükleyin, içindeki e-posta adreslerini Excel dosyası olarak alın.
+            </p>
+            <form id="uploadForm" action="/process" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="fileInput" class="form-label">CSV Dosyası</label>
+                    <input type="file" class="form-control" id="fileInput" name="file" accept=".csv" required>
+                    <div class="file-info">
+                        Maksimum dosya boyutu: 100MB
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="excelName" class="form-label">Excel Dosya Adı</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="excelName" name="excel_name" 
+                               placeholder="Örnek: mail_listesi" required>
+                        <span class="input-group-text">.xlsx</span>
+                    </div>
+                    <div class="form-text">Excel dosyanız bu isimle kaydedilecek</div>
+                </div>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    Dönüştür
+                </button>
+            </form>
+        </div>
+
+        <!-- Excel Import Alanı -->
+        <div class="upload-box text-center">
+            <div class="upload-icon">
+                📊
+            </div>
+            <h2 class="section-title">Excel Dosyalarını Birleştirme</h2>
+            <p class="text-muted mb-4">
+                Birden fazla Excel dosyasını yükleyin, e-posta adreslerini birleştirip tek bir Excel dosyası olarak alın.
+            </p>
+            <form id="excelUploadForm" action="/merge_excel" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="excelFiles" class="form-label">Excel Dosyaları</label>
+                    <input type="file" class="form-control" id="excelFiles" name="files" accept=".xlsx" multiple required>
+                    <div class="file-info">
+                        Birden fazla Excel dosyası seçebilirsiniz
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="mergedExcelName" class="form-label">Birleştirilmiş Excel Dosya Adı</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="mergedExcelName" name="excel_name" 
+                               placeholder="Örnek: birlesik_liste" required>
+                        <span class="input-group-text">.xlsx</span>
+                    </div>
+                    <div class="form-text">Birleştirilmiş Excel dosyanız bu isimle kaydedilecek</div>
+                </div>
+                <button type="submit" class="btn btn-success" id="mergeBtn">
+                    Birleştir
+                </button>
+            </form>
+        </div>
+
+        <!-- Airtable CSV Import Alanı -->
+        <div class="upload-box text-center">
+            <div class="upload-icon">
+                📋
+            </div>
+            <h2 class="section-title">Airtable CSV Dönüştürme</h2>
+            <p class="text-muted mb-4">
+                Airtable'dan export ettiğiniz CSV dosyasını yükleyin, Excel formatına dönüştürün.
+            </p>
+            <form id="airtableUploadForm" action="/process_airtable" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="airtableFile" class="form-label">Airtable CSV Dosyası</label>
+                    <input type="file" class="form-control" id="airtableFile" name="file" accept=".csv" required>
+                    <div class="file-info">
+                        Sadece Airtable'dan export edilen CSV dosyaları kabul edilir
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="airtableExcelName" class="form-label">Excel Dosya Adı</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="airtableExcelName" name="excel_name" 
+                               placeholder="Örnek: airtable_liste" required>
+                        <span class="input-group-text">.xlsx</span>
+                    </div>
+                    <div class="form-text">Excel dosyanız bu isimle kaydedilecek</div>
+                </div>
+                <button type="submit" class="btn btn-info" id="airtableBtn">
+                    Dönüştür
+                </button>
+            </form>
+        </div>
+
+        <!-- Karşılaştır ve Birleştir Alanı -->
+        <div class="upload-box text-center">
+            <div class="upload-icon">
+                🗂️
+            </div>
+            <h2 class="section-title">Birleştirilmiş ve Airtable Excel'lerini Tek Dosyada Birleştir</h2>
+            <p class="text-muted mb-4">
+                İki farklı Excel dosyasını yükleyin, tek bir Excel dosyasında iki ayrı sayfa olarak alın.
+            </p>
+            <form id="compareMergeForm" action="/compare_merge" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="mergedFile1" class="form-label">Birleştirilmiş Excel (Outlook/diğer)</label>
+                    <input type="file" class="form-control" id="mergedFile1" name="file1" accept=".xlsx" required>
+                </div>
+                <div class="mb-3">
+                    <label for="mergedFile2" class="form-label">Airtable Excel</label>
+                    <input type="file" class="form-control" id="mergedFile2" name="file2" accept=".xlsx" required>
+                </div>
+                <div class="mb-3">
+                    <label for="compareMergedExcelName" class="form-label">Çıktı Excel Dosya Adı</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="compareMergedExcelName" name="excel_name" 
+                               placeholder="Örnek: tum_kisiler" required>
+                        <span class="input-group-text">.xlsx</span>
+                    </div>
+                    <div class="form-text">Çıktı dosyanız bu isimle kaydedilecek</div>
+                </div>
+                <button type="submit" class="btn btn-warning" id="compareMergeBtn">
+                    Birleştir
+                </button>
+            </form>
+        </div>
+
+        <div id="error-message" class="alert alert-danger mt-3" role="alert"></div>
+        <div id="loading" class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Yükleniyor...</span>
+            </div>
+            <p class="mt-2">Dosyanız işleniyor, lütfen bekleyin...</p>
+        </div>
+    </div>
+
+    <script>
+        // CSV Form işleme
+        document.getElementById('uploadForm').onsubmit = function(e) {
+            e.preventDefault();
+            handleFormSubmit(this, '/process');
+        };
+
+        // Excel Form işleme
+        document.getElementById('excelUploadForm').onsubmit = function(e) {
+            e.preventDefault();
+            handleFormSubmit(this, '/merge_excel');
+        };
+
+        // Airtable Form işleme
+        document.getElementById('airtableUploadForm').onsubmit = function(e) {
+            e.preventDefault();
+            handleFormSubmit(this, '/process_airtable');
+        };
+
+        // Karşılaştır ve Birleştir Formu işleme
+        document.getElementById('compareMergeForm').onsubmit = function(e) {
+            e.preventDefault();
+            handleFormSubmit(this, '/compare_merge');
+        };
+
+        function handleFormSubmit(form, url) {
+            const fileInput = form.querySelector('input[type="file"]');
+            const excelName = form.querySelector('input[name="excel_name"]');
+            const errorMessage = document.getElementById('error-message');
+            const loading = document.getElementById('loading');
+            
+            // Dosya seçildi mi kontrol et
+            if (!fileInput.files.length) {
+                errorMessage.textContent = 'Lütfen bir dosya seçin';
+                errorMessage.style.display = 'block';
+                return false;
+            }
+            
+            // Excel adı kontrolü
+            if (!excelName.value.trim()) {
+                errorMessage.textContent = 'Lütfen Excel dosyası için bir isim girin';
+                errorMessage.style.display = 'block';
+                return false;
+            }
+            
+            // Yükleniyor göstergesini göster
+            loading.style.display = 'block';
+            errorMessage.style.display = 'none';
+            
+            // Form verilerini oluştur
+            const formData = new FormData(form);
+            
+            // AJAX ile form gönderimi
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        try {
+                            const data = JSON.parse(text);
+                            throw new Error(data.error || 'Dosya işlenirken bir hata oluştu');
+                        } catch (e) {
+                            throw new Error(text || 'Dosya işlenirken bir hata oluştu');
+                        }
+                    });
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Dosyayı indir
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = excelName.value.trim() + '.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                loading.style.display = 'none';
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                errorMessage.textContent = error.message;
+                errorMessage.style.display = 'block';
+                console.error('Hata:', error);
+            });
+            
+            return false;
+        }
+    </script>
+</body>
+</html> 
