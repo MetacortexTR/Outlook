@@ -141,11 +141,7 @@ try:
 
     @app.route('/favicon.ico')
     def favicon():
-        try:
-            return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
-        except Exception as e:
-            logger.error(f"Favicon error: {str(e)}")
-            return '', 404
+        return send_from_directory(app.static_folder, 'favicon.ico')
 
     @app.route('/')
     def index():
