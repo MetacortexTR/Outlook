@@ -4,3 +4,4 @@ openpyxl==3.1.2
 pyxlsb==1.0.10
 flask-cors
 chardet 
+gunicorn==21.2.0 
