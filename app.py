@@ -17,7 +17,7 @@ import sys
 # Loglama ayarları
 logging.basicConfig(
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
         logging.FileHandler('app.log', encoding='utf-8', mode='w')
@@ -30,6 +30,7 @@ app = Flask(__name__, static_folder='static')
 CORS(app)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Favicon için route
 @app.route('/favicon.ico')
@@ -37,12 +38,17 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static'),
                              'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
+@app.before_request
+def log_request_info():
+    logger.debug('Headers: %s', request.headers)
+    logger.debug('Body: %s', request.get_data())
+
 @app.after_request
 def after_request(response):
+    logger.debug('Response: %s', response.get_data())
     response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
     response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
     return response
 
 def is_csv_file(filename):
@@ -98,10 +104,21 @@ def is_airtable_csv(file_path):
 
 # Uploads klasörünü oluştur
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+os.makedirs('static', exist_ok=True)
+
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy", "timestamp": time.time()})
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        logger.debug('Ana sayfa isteği alındı')
+        return render_template('index.html')
+    except Exception as e:
+        logger.error(f'Ana sayfa hatası: {str(e)}')
+        logger.error(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/process', methods=['POST', 'OPTIONS'])
 def process_file():
@@ -567,4 +584,5 @@ def compare_merge():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
+    logger.info(f'Uygulama başlatılıyor - Port: {port}')
     app.run(host='0.0.0.0', port=port, debug=False) 
